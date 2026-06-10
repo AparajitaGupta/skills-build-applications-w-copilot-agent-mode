@@ -1,37 +1,40 @@
-// Bicep template to deploy/secure the webassets-prod Storage Account
-// Azure Advisor hardening applied:
-// - Enforce HTTPS-only traffic (supportsHttpsTrafficOnly)
+// Azure Advisor remediation (assumed): Harden Storage Account security settings
+// Target: webassets-prod in resource group web-prod-rg
+// This template enforces:
+// - HTTPS only (supportsHttpsTrafficOnly)
+// - Minimum TLS version 1.2
 // - Disable public blob access (allowBlobPublicAccess)
+//
+// Note: Subscription and resource group are deployment scope concerns; deploy this template
+// in each subscription (2fa761b0-056f-43b8-8eba-2677199dfb9d and 84ca48fe-c942-42e5-b492-d56681d058fa)
+// to the resource group 'web-prod-rg'.
 
 targetScope = 'resourceGroup'
 
-@description('Name of the existing Storage Account to secure')
+@description('Name of the existing storage account to harden.')
 param storageAccountName string = 'webassets-prod'
 
-@description('Location of the Storage Account (only required if deploying a new account)')
-param location string = resourceGroup().location
+@description('Location of the existing storage account. Used for the resource declaration.')
+param location string
 
-// Reference the existing storage account so we can update its properties.
-resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' existing = {
+resource storage 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   name: storageAccountName
+  location: location
+  // Using an existing resource declaration so we can update properties safely.
+  existing: true
 }
 
-// Update the existing storage account with secure defaults.
-resource storageAccountUpdate 'Microsoft.Storage/storageAccounts@2023-01-01' = {
-  name: storageAccount.name
+// Patch/update the existing storage account with secure settings.
+resource storageUpdate 'Microsoft.Storage/storageAccounts@2023-01-01' = {
+  name: storage.name
   location: location
-  kind: storageAccount.kind
+  kind: storage.kind
   sku: {
-    name: storageAccount.sku.name
+    name: storage.sku.name
   }
   properties: {
-    // Advisor: Secure transfer should be enabled
     supportsHttpsTrafficOnly: true
-
-    // Advisor: Prevent anonymous/public access to blobs/containers
+    minimumTlsVersion: 'TLS1_2'
     allowBlobPublicAccess: false
-
-    // Keep current minimum TLS if already set; otherwise enforce TLS 1.2
-    minimumTlsVersion: storageAccount.properties.minimumTlsVersion ?? 'TLS1_2'
   }
 }
